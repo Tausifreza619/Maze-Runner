@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Maze Runner PRO</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="menu">
+  <h1>MAZE RUNNER PRO</h1>
+
+  <button onclick="startGame('easy')">Easy</button>
+  <button onclick="startGame('medium')">Medium</button>
+  <button onclick="startGame('hard')">Hard</button>
+
+  <p>Arrow keys / WASD to move</p>
+</div>
+
+<div id="hud">
+  <div>Time: <span id="time"></span></div>
+  <div>Score: <span id="score"></span></div>
+  <div>Coins: <span id="coins"></span></div>
+  <div>Best: <span id="best"></span></div>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="overlay"></div>
+
+<script src="script.js"></script>
+<button onclick="restartGame()">Restart</button>
+</body>
+</html>
