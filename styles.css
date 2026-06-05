@@ -805,13 +805,25 @@ select:hover, select:focus {
   z-index: 60;
 }
 
-/* Show only on touch devices */
-@media(pointer: coarse) {
+/* Centered D-pad for mobile and touch devices */
+@media (pointer: coarse), (max-width: 768px) {
   #dpad {
-    display: grid;
+    display: grid !important;
+    position: fixed !important;
+    bottom: 15px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    grid-template-columns: repeat(3, 48px) !important;
+    grid-template-rows: repeat(3, 48px) !important;
+    gap: 5px !important;
+  }
+  #game-wrap {
+    align-items: flex-start !important;
+    padding-top: 15px !important;
   }
   #toast {
-    bottom: 196px; /* Avoid overlapping the D-pad */
+    bottom: 180px !important;
   }
 }
 
