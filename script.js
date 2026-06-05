@@ -15,9 +15,9 @@
    ══════════════════════════════════════════ */
 const CANVAS_SIZE = 600;
 const CONFIGS = {
-  easy:   { cols: 15, rows: 15, time: 120, enemyMs: 460, fog: false, nCoins: 18 },
-  medium: { cols: 25, rows: 25, time: 90,  enemyMs: 290, fog: true,  nCoins: 32 },
-  hard:   { cols: 35, rows: 35, time: 60,  enemyMs: 180, fog: true,  nCoins: 55 },
+  easy:   { cols: 15, rows: 15, time: 120, enemyMs: 700, fog: false, nCoins: 18 },
+  medium: { cols: 25, rows: 25, time: 90,  enemyMs: 500, fog: true,  nCoins: 32 },
+  hard:   { cols: 35, rows: 35, time: 60,  enemyMs: 350, fog: true,  nCoins: 55 },
 };
 
 /* ══════════════════════════════════════════
@@ -180,6 +180,11 @@ class AudioSystem {
     this.playTone(900, 0.05, 'triangle', 0.15);
     this.playTone(600, 0.06, 'triangle', 0.15, 0.035);
   }
+
+  playPowerup() {
+    this.playTone(350, 0.08, 'sawtooth', 0.2); // Low synth start
+    this.playTone(700, 0.25, 'triangle', 0.18, 0.06); // Sweep up
+  }
 }
 
 const audio = new AudioSystem();
@@ -318,6 +323,25 @@ class Maze {
     if (dy === 1) { a.w[0] = 0; b.w[2] = 0; }
     if (dy === -1) { a.w[2] = 0; b.w[0] = 0; }
   }
+
+  addLoops(fraction) {
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.cols; x++) {
+        if (x < this.cols - 1 && this.grid[y][x].w[1] === 1) {
+          if (Math.random() < fraction) {
+            this.grid[y][x].w[1] = 0;
+            this.grid[y][x + 1].w[3] = 0;
+          }
+        }
+        if (y < this.rows - 1 && this.grid[y][x].w[2] === 1) {
+          if (Math.random() < fraction) {
+            this.grid[y][x].w[2] = 0;
+            this.grid[y + 1][x].w[0] = 0;
+          }
+        }
+      }
+    }
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -360,6 +384,11 @@ class MazeRunnerGame {
     this.lastTimestamp = 0;
     this.timeAccumulator = 0;
     this.enemyTimeAccumulator = 0;
+    
+    // Powerups and Freeze States
+    this.powerups = new Set();
+    this.enemyFrozenTimer = 0;
+    this.enemyStartDelay = 0;
     
     // Trail / Visual tracking
     this.trail = [];
@@ -515,7 +544,19 @@ class MazeRunnerGame {
   sizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const hudHeight = 64;
-    const displaySize = Math.min(window.innerWidth, window.innerHeight - hudHeight - 16, CANVAS_SIZE);
+    
+    // Check if D-pad is active/visible
+    const dpadEl = document.getElementById('dpad');
+    const hasDpad = dpadEl && (window.getComputedStyle(dpadEl).display !== 'none');
+    const dpadSpacing = hasDpad ? 170 : 0;
+    const verticalGapPadding = hasDpad ? 36 : 16;
+
+    // Calculate maximum available canvas dimension with margins
+    const displaySize = Math.max(120, Math.min(
+      window.innerWidth - 16, 
+      window.innerHeight - hudHeight - dpadSpacing - verticalGapPadding, 
+      CANVAS_SIZE
+    ));
 
     this.canvas.style.width = displaySize + 'px';
     this.canvas.style.height = displaySize + 'px';
@@ -728,6 +769,27 @@ class MazeRunnerGame {
     this.totalCoins = this.coins.size;
   }
 
+  spawnPowerups() {
+    this.powerups.clear();
+    const config = {
+      easy: 2,
+      medium: 3,
+      hard: 4
+    }[this.diff] || 2;
+    const skip = new Set(['0,0', `${this.cols-1},${this.rows-1}`, `${this.cols-1},0`]);
+    let attempts = 0;
+
+    while (this.powerups.size < config && attempts < 1000) {
+      const x = Math.random() * this.cols | 0;
+      const y = Math.random() * this.rows | 0;
+      const key = `${x},${y}`;
+      if (!skip.has(key) && !this.coins.has(key) && !this.powerups.has(key)) {
+        this.powerups.add(key);
+      }
+      attempts++;
+    }
+  }
+
   /* ─── SCREEN SHAKE TRIGGER ─── */
   triggerScreenShake() {
     if (!this.screenShake) return;
@@ -791,6 +853,19 @@ class MazeRunnerGame {
       this.popHUDElement('hv-s');
       this.popHUDElement('hv-c');
       this.updateHUD();
+    }
+
+    // Check for power-up collection (EMP Glitch)
+    if (this.powerups.has(key)) {
+      this.powerups.delete(key);
+      this.enemyFrozenTimer = 5.0; // Freeze enemy for 5 seconds
+      this.score += 20; // Bonus points for override
+      audio.playPowerup();
+      this.triggerScreenShake();
+      this.particles.spawnBurst(this.player.x, this.player.y, this.cs, '#d500f9'); // Magenta burst
+      this.popHUDElement('hv-s');
+      this.updateHUD();
+      this.showToast('EMP INITIATED // SYSTEM OVERRIDE 5.0s');
     }
 
     this.checkWinCondition();
@@ -913,6 +988,10 @@ class MazeRunnerGame {
 
     // Build Maze structure
     this.maze = new Maze(this.cols, this.rows);
+    
+    // Add loops to create multiple paths to the destination
+    const loopFractions = { easy: 0.20, medium: 0.15, hard: 0.10 };
+    this.maze.addLoops(loopFractions[difficulty] || 0.10);
 
     // Positions & Lerp initializations
     this.player.x = 0;
@@ -936,8 +1015,13 @@ class MazeRunnerGame {
     this.hintActive = false;
     this.hintSet = null;
 
+    // Reset powerup & grace period states
+    this.enemyFrozenTimer = 0;
+    this.enemyStartDelay = 3.0; // 3 seconds grace period
+
     // Spawns
     this.spawnCoins();
+    this.spawnPowerups();
     if (this.hasFog) {
       this.initFog();
     }
@@ -1088,12 +1172,24 @@ class MazeRunnerGame {
         }
       }
 
-      // 2. Enemy movement timer
+      // Decrement enemy frozen timer
+      if (this.enemyFrozenTimer > 0) {
+        this.enemyFrozenTimer = Math.max(0, this.enemyFrozenTimer - dt);
+      }
+
+      // Decrement enemy start delay
+      if (this.enemyStartDelay > 0) {
+        this.enemyStartDelay = Math.max(0, this.enemyStartDelay - dt);
+      }
+
+      // 2. Enemy movement timer (only moves if start delay is over and not frozen)
       const config = CONFIGS[this.diff];
       this.enemyTimeAccumulator += dt;
       const intervalSec = config.enemyMs / 1000;
       if (this.enemyTimeAccumulator >= intervalSec) {
-        this.moveEnemy();
+        if (this.enemyStartDelay <= 0 && this.enemyFrozenTimer <= 0) {
+          this.moveEnemy();
+        }
         this.enemyTimeAccumulator -= intervalSec;
       }
 
@@ -1235,6 +1331,34 @@ class MazeRunnerGame {
       this.ctx.restore();
     });
 
+    // 4b. Power-ups drawing (EMP nodes)
+    this.powerups.forEach(key => {
+      const [x, y] = key.split(',').map(Number);
+      if (!this.isVisible(x, y)) return;
+
+      const cx = x * this.cs + this.cs / 2;
+      const cy = y * this.cs + this.cs / 2;
+
+      this.ctx.save();
+      this.ctx.shadowColor = '#d500f9';
+      this.ctx.shadowBlur = 10;
+      this.ctx.fillStyle = '#d500f9';
+
+      this.ctx.translate(cx, cy);
+      this.ctx.rotate(this.gameTick * 0.05 + x + y);
+
+      const size = Math.max(3, this.cs * 0.26);
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, -size);
+      this.ctx.lineTo(size, 0);
+      this.ctx.lineTo(0, size);
+      this.ctx.lineTo(-size, 0);
+      this.ctx.closePath();
+      this.ctx.fill();
+
+      this.ctx.restore();
+    });
+
     // 5. Player trails drawing
     this.trail.forEach((tPoint, idx) => {
       const alpha = (idx / this.trail.length) * 0.26;
@@ -1275,17 +1399,62 @@ class MazeRunnerGame {
 
     // 8. Enemy tracker drawing
     {
+      const isFrozen = this.enemyFrozenTimer > 0;
+      const isDelayed = this.enemyStartDelay > 0;
       const pulse = 0.72 + 0.11 * Math.sin(this.enemyAnimPulse);
       const enemySize = this.cs * pulse;
       const ex = this.enemy.renderX * this.cs + (this.cs - enemySize) / 2;
       const ey = this.enemy.renderY * this.cs + (this.cs - enemySize) / 2;
-      
+
       this.ctx.save();
-      this.ctx.shadowColor = '#ff1744';
-      this.ctx.shadowBlur = 16 + 10 * Math.sin(this.enemyAnimPulse);
-      this.ctx.fillStyle = '#ff1744';
+      if (isFrozen) {
+        this.ctx.shadowColor = '#d500f9';
+        this.ctx.shadowBlur = 12 + 6 * Math.sin(this.enemyAnimPulse);
+        this.ctx.fillStyle = '#d500f9';
+      } else if (isDelayed) {
+        this.ctx.shadowColor = '#00e5ff';
+        this.ctx.shadowBlur = 10 + 5 * Math.sin(this.enemyAnimPulse);
+        this.ctx.fillStyle = '#00e5ff';
+      } else {
+        this.ctx.shadowColor = '#ff1744';
+        this.ctx.shadowBlur = 16 + 10 * Math.sin(this.enemyAnimPulse);
+        this.ctx.fillStyle = '#ff1744';
+      }
       this.ctx.fillRect(ex, ey, enemySize, enemySize);
       this.ctx.restore();
+
+      // If frozen or delayed, draw a neon shield/ring and timer countdown
+      if (isFrozen || isDelayed) {
+        const shieldColor = isFrozen ? '#d500f9' : '#00e5ff';
+        const timerVal = isFrozen ? this.enemyFrozenTimer : this.enemyStartDelay;
+
+        this.ctx.save();
+        this.ctx.strokeStyle = shieldColor;
+        this.ctx.lineWidth = this.cs > 16 ? 1.5 : 1.0;
+        this.ctx.beginPath();
+        this.ctx.arc(
+          this.enemy.renderX * this.cs + this.cs / 2,
+          this.enemy.renderY * this.cs + this.cs / 2,
+          this.cs * 0.72,
+          0,
+          Math.PI * 2
+        );
+        this.ctx.stroke();
+        this.ctx.restore();
+
+        if (this.cs > 12) {
+          this.ctx.save();
+          this.ctx.fillStyle = shieldColor;
+          this.ctx.font = `bold ${Math.max(6, this.cs * 0.35)}px Orbitron, sans-serif`;
+          this.ctx.textAlign = 'center';
+          this.ctx.fillText(
+            `${timerVal.toFixed(1)}s`,
+            this.enemy.renderX * this.cs + this.cs / 2,
+            this.enemy.renderY * this.cs - 4
+          );
+          this.ctx.restore();
+        }
+      }
     }
 
     // 9. Particle arrays
