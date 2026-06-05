@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Maze Runner Pro - Solve neural labyrinths, gather core coins, and evade rogue tracking nodes. A premium cyberpunk retro arcade maze game built with HTML5 Canvas.">
+  <meta name="keywords" content="maze, cyberpunk, retro game, canvas, html5 game, pathfinding, arcade, web audio api">
+  <meta name="author" content="Antigravity Team">
+  <title>MAZE RUNNER PRO // Neural Labyrinth</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <!-- Corrected CSS reference from style.css to styles.css -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Screen Grid Scanlines Overlay -->
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <!-- MAIN MENU -->
+  <main id="menu" role="main">
+    <canvas id="mbg"></canvas>
+    <div class="menu-inner">
+      <h1 class="m-title" data-text="MAZE RUNNER">MAZE<br>RUNNER</h1>
+      <p class="m-sub">neural labyrinth · v2.1</p>
+      
+      <div class="diff-row" role="group" aria-label="Difficulty Selection">
+        <button class="d-btn easy" onclick="startGame('easy')" aria-label="Play Easy Mode: 15 by 15 grid, 120 seconds">
+          <span>EASY</span><small>15 × 15 · 120s</small>
+        </button>
+        <button class="d-btn med" onclick="startGame('medium')" aria-label="Play Medium Mode: 25 by 25 grid, 90 seconds">
+          <span>MEDIUM</span><small>25 × 25 · 90s</small>
+        </button>
+        <button class="d-btn hard" onclick="startGame('hard')" aria-label="Play Hard Mode: 35 by 35 grid, 60 seconds with fog of war">
+          <span>HARD</span><small>35 × 35 · 60s · FOG</small>
+        </button>
+      </div>
+      
+      <div class="menu-actions">
+        <button class="m-btn" onclick="toggleSettings(true)" aria-label="Open Game Settings">⚙ CONFIG SYSTEM</button>
+      </div>
+
+      <p class="m-info">
+        <span class="kbd">↑↓←→</span> / <span class="kbd">W A S D</span> move &nbsp;·&nbsp;
+        <span class="kbd">H</span> hint (−5 pts) &nbsp;·&nbsp;
+        <span class="kbd">ESC</span> / <span class="kbd">P</span> pause
+      </p>
+      <p id="m-best" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <!-- HEAD-UP DISPLAY (HUD) -->
+  <header id="hud" style="display: none;">
+    <div class="hud-grp" role="status">
+      <div class="hud-item"><div class="hud-lbl">⏱ TIME</div> <div class="hud-val" id="hv-t">--</div></div>
+      <div class="hud-item"><div class="hud-lbl">◆ SCORE</div><div class="hud-val" id="hv-s">0</div></div>
+      <div class="hud-item"><div class="hud-lbl">✦ COINS</div><div class="hud-val" id="hv-c">0/0</div></div>
+      <div class="hud-item"><div class="hud-lbl">★ BEST</div> <div class="hud-val" id="hv-b">--</div></div>
+    </div>
+    <div class="hud-acts">
+      <button class="h-btn" onclick="showHint()" aria-label="Show hint, deducts 5 points">[ H ] HINT</button>
+      <button class="h-btn h-pause" onclick="togglePause()" aria-label="Pause game">⏸ PAUSE</button>
+      <button class="h-btn h-exit" onclick="goMenu()" aria-label="Exit to main menu">⏹ EXIT</button>
+    </div>
+  </header>
+
+  <!-- GAME SCREEN -->
+  <section id="game-wrap" style="display: none;" aria-label="Game Canvas Arena">
+    <div class="canvas-container">
+      <canvas id="game"></canvas>
+    </div>
+  </section>
+
+  <!-- OVERLAYS -->
+  
+  <!-- Game Over / Victory Overlay -->
+  <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ov-title">
+    <div class="ov-inner">
+      <h2 class="ov-title" id="ov-title"></h2>
+      <div class="ov-stats" id="ov-stats"></div>
+      <div class="ov-btns">
+        <button class="ov-btn" id="ov-replay">PLAY AGAIN</button>
+        <button class="ov-btn sec" onclick="goMenu()">MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Configuration Panel Overlay -->
+  <div id="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="set-title" style="display: none;">
+    <div class="ov-inner glassmorphism">
+      <h2 class="ov-subtitle" id="set-title">⚙ CONFIG SYSTEM</h2>
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label for="set-volume">MASTER VOLUME</label>
+          <div class="range-wrap">
+            <input type="range" id="set-volume" min="0" max="100" value="50">
+            <span class="range-val" id="set-volume-val">50%</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label for="set-particles">PARTICLES</label>
+          <select id="set-particles">
+            <option value="high">HIGH DENSITY</option>
+            <option value="medium">MEDIUM DENSITY</option>
+            <option value="low">LOW DENSITY</option>
+            <option value="none">DEACTIVATED</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label for="set-shake" class="checkbox-lbl">
+            <span>SCREEN SHAKE</span>
+            <input type="checkbox" id="set-shake" checked>
+            <span class="custom-chk"></span>
+          </label>
+        </div>
+      </div>
+      <div class="ov-btns">
+        <button class="ov-btn" onclick="toggleSettings(false)">SAVE & CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Overlay -->
+  <div id="pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" style="display: none;">
+    <div class="ov-inner glassmorphism">
+      <h2 class="ov-title-paused" id="pause-title">NEURAL LOCK</h2>
+      <p class="ov-stats">Labyrinth transmission temporarily suspended.</p>
+      <div class="ov-btns">
+        <button class="ov-btn" onclick="togglePause()">RESUME RUN</button>
+        <button class="ov-btn sec" onclick="goMenu()">TERMINATE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Toasts -->
+  <div id="toast" role="alert" aria-live="polite"></div>
+
+  <!-- Mobile D-Pad Controller -->
+  <nav id="dpad" aria-label="Mobile Navigation Pad">
+    <div></div><button class="dp" id="dp-u" aria-label="Move Up">▲</button><div></div>
+    <button class="dp" id="dp-l" aria-label="Move Left">◄</button>
+    <button class="dp" id="dp-d" aria-label="Move Down">▼</button>
+    <button class="dp" id="dp-r" aria-label="Move Right">►</button>
+  </nav>
+
+  <script src="script.js"></script>
+</body>
+</html>
