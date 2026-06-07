@@ -1,5 +1,5 @@
 /**
- * MAZE RUNNER PRO // Neural Labyrinth Engine
+ * MAZE RUNNER PRO 
  * Clean, structured ES6 implementation with high-fidelity systems:
  * - Web Audio API Synthesizer (AudioSystem)
  * - Safe Storage Interface (SafeStorage)
